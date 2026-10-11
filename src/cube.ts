@@ -21,7 +21,18 @@ import {
   computeLetterSchemeMap,
   flipTargetEdgeLetter,
   resolveTargetFlipEdgeIds,
+  chunkIntoPairs,
+  type LetterSchemeInput,
 } from "./helpers";
+import { generateScramble, type ScrambleOptions } from "./scramble";
+
+export interface BldMemoResult {
+  edges: string[][];
+  corners: string[][];
+  edgeTokens: string[];
+  cornerTokens: string[];
+  hasParity: boolean;
+}
 
 export type CubeState = {
   center: number[];
@@ -238,6 +249,35 @@ export class Cube {
     return this;
   }
 
+  /**
+   * Generates a random WCA-style scramble algorithm.
+   */
+  static scramble(options?: number | ScrambleOptions): string {
+    return generateScramble(options);
+  }
+
+  /**
+   * Creates a solved cube and applies the given scramble moves.
+   */
+  static fromScramble(scramble: string): Cube {
+    return new Cube().move(scramble);
+  }
+
+  /**
+   * Scrambles this cube instance with random WCA-style moves and returns this.
+   */
+  scramble(options?: number | ScrambleOptions): this {
+    const alg = generateScramble(options);
+    return this.move(alg);
+  }
+
+  /**
+   * Applies scramble moves to this cube (alias for move).
+   */
+  applyScramble(scramble: string): this {
+    return this.move(scramble);
+  }
+
   upright(): string {
     const clone = this.clone();
     const result: string[] = [];
@@ -283,18 +323,21 @@ export class Cube {
     return result.join(" ");
   }
 
-  to3bldEdgePath({
+  /**
+   * Traces the 3BLD edge cycles and returns an array of letter tokens.
+   */
+  to3bldEdgeTokens({
     buffer,
     letterScheme = SPEFFZ,
     edgePriority = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
     targetFlip = [],
   }: {
     buffer: string;
-    letterScheme?: string;
+    letterScheme?: LetterSchemeInput;
     edgePriority?: number[];
     targetFlip?: number[];
-  }): string {
-    let letterPath = "";
+  }): string[] {
+    const tokens: string[] = [];
     let nextLetter = buffer;
     const letterSchemeMap = computeLetterSchemeMap(letterScheme, "edge");
     const visitedEdges = new Set<number>();
@@ -307,21 +350,48 @@ export class Cube {
         letterSchemeMap,
         targetFlip,
       });
-      letterPath += nextLetter;
+      if (nextLetter) {
+        tokens.push(nextLetter);
+      }
     }
-    return letterPath;
+    return tokens;
   }
 
-  to3bldCornerPath({
+  /**
+   * Traces the 3BLD edge cycles and returns a concatenated string of letter targets.
+   */
+  to3bldEdgePath({
+    buffer,
+    letterScheme = SPEFFZ,
+    edgePriority = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    targetFlip = [],
+  }: {
+    buffer: string;
+    letterScheme?: LetterSchemeInput;
+    edgePriority?: number[];
+    targetFlip?: number[];
+  }): string {
+    return this.to3bldEdgeTokens({
+      buffer,
+      letterScheme,
+      edgePriority,
+      targetFlip,
+    }).join("");
+  }
+
+  /**
+   * Traces the 3BLD corner cycles and returns an array of letter tokens.
+   */
+  to3bldCornerTokens({
     buffer,
     letterScheme = SPEFFZ,
     cornerPriority = [0, 1, 2, 3, 4, 5, 6, 7],
   }: {
     buffer: string;
-    letterScheme?: string;
+    letterScheme?: LetterSchemeInput;
     cornerPriority?: number[];
-  }): string {
-    let letterPath = "";
+  }): string[] {
+    const tokens: string[] = [];
     let nextLetter = buffer;
     const letterSchemeMap = computeLetterSchemeMap(letterScheme, "corner");
     const visitedCorners = new Set<number>();
@@ -333,9 +403,73 @@ export class Cube {
         visitedCorners,
         letterSchemeMap,
       });
-      letterPath += nextLetter;
+      if (nextLetter) {
+        tokens.push(nextLetter);
+      }
     }
-    return letterPath;
+    return tokens;
+  }
+
+  /**
+   * Traces the 3BLD corner cycles and returns a concatenated string of letter targets.
+   */
+  to3bldCornerPath({
+    buffer,
+    letterScheme = SPEFFZ,
+    cornerPriority = [0, 1, 2, 3, 4, 5, 6, 7],
+  }: {
+    buffer: string;
+    letterScheme?: LetterSchemeInput;
+    cornerPriority?: number[];
+  }): string {
+    return this.to3bldCornerTokens({
+      buffer,
+      letterScheme,
+      cornerPriority,
+    }).join("");
+  }
+
+  /**
+   * High-level 3BLD memo generator returning grouped pairs, tokens, and parity.
+   */
+  to3bldMemo({
+    edgeBuffer = "C",
+    cornerBuffer = "E",
+    letterScheme = SPEFFZ,
+    edgePriority,
+    cornerPriority,
+    targetFlip,
+  }: {
+    edgeBuffer?: string;
+    cornerBuffer?: string;
+    letterScheme?: LetterSchemeInput;
+    edgePriority?: number[];
+    cornerPriority?: number[];
+    targetFlip?: number[];
+  } = {}): BldMemoResult {
+    const edgeTokens = this.to3bldEdgeTokens({
+      buffer: edgeBuffer,
+      letterScheme,
+      edgePriority,
+      targetFlip,
+    });
+    const cornerTokens = this.to3bldCornerTokens({
+      buffer: cornerBuffer,
+      letterScheme,
+      cornerPriority,
+    });
+
+    const edges = chunkIntoPairs(edgeTokens);
+    const corners = chunkIntoPairs(cornerTokens);
+    const hasParity = edgeTokens.length % 2 === 1;
+
+    return {
+      edges,
+      corners,
+      edgeTokens,
+      cornerTokens,
+      hasParity,
+    };
   }
 
   nextCornerLetter({

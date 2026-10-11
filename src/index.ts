@@ -1,4 +1,4 @@
-export { Cube, type CubeState } from "./cube";
+export { Cube, type CubeState, type BldMemoResult } from "./cube";
 export {
   type MoveDefinition,
   type Orientation,
@@ -9,5 +9,15 @@ export {
   computeLetterSchemeMap,
   flipTargetEdgeLetter,
   resolveTargetFlipEdgeIds,
+  chunkIntoPairs,
+  stickerIdForIndex,
+  indexForStickerId,
+  type LetterSchemeInput,
 } from "./helpers";
+export {
+  generateScramble,
+  parseScramble,
+  baseFace,
+  type ScrambleOptions,
+} from "./scramble";
 export { SPEFFZ, SPEFCZ, CHS } from "./letterSchemes";
